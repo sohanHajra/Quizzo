@@ -1,104 +1,73 @@
-# 🎉 Quizzo: Your AI-Powered Quiz Companion
+# Quizzo
 
-Quizzo is an innovative assessment and quiz tool that harnesses the power of AI to enhance learning and understanding across various subjects. By dynamically generating quizzes based on your provided documents, Quizzo offers a personalized learning experience that helps reinforce knowledge and improves retention.
-<br><br>
-## 🚀 Features
+**An early-college personal LLM project, revisited in 2026.** I built Quizzo while I was also interning at RadicalX, because generic quiz generation was not giving me the specific, well-framed questions I wanted from my own notes before exams. I wanted to upload the material I was actually studying, choose a topic, and test myself against that context instead of getting generic questions.
 
-- **Instant Feedback**: Get immediate feedback on your answers to strengthen your understanding and boost confidence.
-- **Comprehensive Explanations**: Gain insights with detailed explanations that clarify the reasoning behind correct answers.
-- **Dynamic Quiz Generation**: Seamlessly create quizzes from a wide range of documents, including textbooks, articles, and scholarly papers.
-- **Tailored Learning Experience**: Focus your quizzes on specific topics or areas of interest for a customized educational journey.
-- **User-Friendly Interface**: Enjoy an intuitive and engaging platform that makes learning fun and accessible for everyone.
+Quizzo remains a learning and portfolio prototype, **not a production learning platform**. Its original development dates to June 2024; the 2026 maintenance pass improved its reliability, configuration, tests, and documentation. This is not a claim that the 2026 refinements were present in the 2024 version.
 
+## How it works
 
-## 🛠️ Getting Started
+```text
+student PDFs -> PyPDFLoader -> 1,000-character chunks (100 overlap)
+             -> Vertex AI text embeddings -> in-memory Chroma index
+topic -> retrieve relevant document chunks -> grounded Gemini prompt
+      -> parse/validate JSON question -> filter duplicates -> Streamlit quiz
+      -> persistent answers / feedback -> downloadable score PDF
+```
 
-- Ensure you have Python 3.7 or higher installed.
-- Set up a Google Cloud account and enable the Vertex AI API.
+The app uses **Python, Streamlit, LangChain, Google Vertex AI (Gemini and embeddings), Chroma, NLTK-inspired token n-gram similarity, and ReportLab**. It accepts PDF files and generates up to 10 multiple-choice questions with answers and explanations.
 
-## 🔧 Installation
+## Run it locally
 
-Follow these steps to install and run Quizzo on your local machine:
+Requires Python 3.10+ and a **Google Cloud project with Vertex AI access, supported model access, and Application Default Credentials**. Model availability and API compatibility change over time; test your configured models in your own project. Cloud API use may incur charges. No credentials are provided with the repository.
 
-1. **Clone the repository**:
-    ```bash
-    git clone https://github.com/crypto-king404/quizzo.git
-    ```
-2. **Navigate to the project directory**:
-    ```bash
-    cd quizzo
-    ```
-3. **Install dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+git clone https://github.com/sohanHajra/Quizzo.git
+cd Quizzo
+python -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+gcloud auth application-default login
+export GOOGLE_CLOUD_PROJECT="your-project-id"    # PowerShell: $env:GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+export QUIZZO_LLM_MODEL="gemini-pro"              # Replace with a model available to your project
+streamlit run app.py
+```
 
-## 🔑 API Keys and Configuration
+Do not commit service-account JSON. Prefer short-lived, least-privilege credentials through ADC and protect document content. This prototype sends extracted text to Google Cloud AI services and stores vectors in a local in-memory collection.
 
-- Obtain your Google Cloud API credentials and save the JSON key file.
-- Update the `app.py` file with the correct path to your service account key file.<br>
+## Verification
 
-## 📚 Usage
+Offline tests cover question JSON/schema parsing and duplicate detection without cloud credentials.
 
-To start your learning journey with Quizzo, follow these simple steps:
+```bash
+python -m compileall -q app.py tasks
+python -m unittest discover -s tests -v
+```
 
-1. **Launch the application**:
-    ```bash
-    streamlit run app.py
-    ```
-2. **Upload Your Document**: Choose a textbook, scholarly paper, or any other document you wish to create a quiz from.
-3. **Generate Your Quiz**: The tool will analyze the content and generate a tailored quiz for you.
-4. **Take the Quiz**: Answer the questions and receive instant feedback along with insightful explanations.
+A GitHub Actions workflow runs these checks on push and pull request. **Passing offline tests is not proof of working Vertex AI credentials, model availability, an end-to-end cloud run, or deployment uptime.**
 
-## 📷 Screenshots
+## 2026 maintenance notes
 
-![Quizzo](https://media.licdn.com/dms/image/v2/D4E2DAQElCShCLw082Q/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1719365658248?e=1728759600&v=beta&t=a8nf28Sg4OR7rSdHNrQjWcwOA2pBf8mi77xQoZ4zqHg)
-![Generated Quiz Question](https://media.licdn.com/dms/image/v2/D4E2DAQEfnZ_HBZPSXw/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1719372231522?e=1728759600&v=beta&t=mqu5J7Yt3QDzmHjel-oSFaDkKjcV1ln4OinlAB5VmXg)
-![Generated Question with Progress](https://media.licdn.com/dms/image/v2/D4E2DAQFV6lOA2GoKRA/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1719365769305?e=1728759600&v=beta&t=mkvm3M5g98dVBQ6KjEk3L6OSw9I_Tyjaa4qMzb07_1k)
+- Replaced hard-coded credential paths/project placeholders with environment/ADC configuration.
+- Bounded model-generation attempts; invalid/duplicate questions no longer retry forever.
+- Validates JSON question shape, labels, answers, and explanations before displaying them.
+- Passes retrieved document text explicitly into the prompt.
+- Fixes quiz answer/score persistence across Streamlit reruns and keeps report generation in memory.
+- Uses token rather than character n-gram similarity for duplicate screening.
+- Cleans up temporary uploaded-PDF files even when ingestion fails.
+- Added focused offline tests and checks workflow.
 
+**Limitations:** This is not a pedagogical efficacy study. Similarity filtering does not guarantee question quality, retrieval does not eliminate model hallucinations, and structured output is checked for shape rather than factual correctness. Scanned PDFs without extractable text are not OCR'd. Only PDF input is supported. Multiple-choice generation depends on configured cloud-model access; the historical `gemini-pro` default may require replacement in a current Google Cloud project.
 
-## 🤝 Contributing
+## A few things I'd test next
 
-We welcome your contributions to make Quizzo even better! Whether you have ideas for new features, suggestions for improvement, or have found issues, we’d love to hear from you.
+- Evaluate question relevance, answer faithfulness, and difficulty on a labeled set of study notes.
+- Add explicit source/page citations and answer-verification checks.
+- Improve document parsing and retrieval over tables/equations/scanned material.
+- Add usage limits, accessibility checks, and privacy controls before serving other users.
 
-### How to Contribute
+## History and ownership
 
-1. **Fork the repository**.
-2. **Create a new branch**:
-    ```bash
-    git checkout -b feature-branch
-    ```
-3. **Make your changes**.
-4. **Commit your changes**:
-    ```bash
-    git commit -m "Description of changes"
-    ```
-5. **Push to the branch**:
-    ```bash
-    git push origin feature-branch
-    ```
-6. **Open a pull request**.
+Personal project by **Sohan Hajra**, developed during early college, with original repository activity starting June 2, 2024. The 2026 revisit is a distinct maintenance pass.
 
-## 🗺️ Roadmap
-
-- [ ] Add support for more document formats (e.g., Word, HTML).
-- [ ] Implement user accounts for saving progress.
-
-## ❓ FAQs
-
-**Q: What document formats are supported?**  
-A: Currently, Quizzo supports PDF files for document ingestion.
-<br>
-## 🙏 Acknowledgments
-
-- Thank you to the developers of Streamlit and LangChain for their amazing libraries!
-
-## 📄 License
-
-Quizzo is licensed under the [MIT License](LICENSE).
-
-## 📬 Contact
-
-For any questions or further assistance, please reach out at [sohancollege27@gmail.com].
-
----
+MIT licensed. See [LICENSE](LICENSE).
