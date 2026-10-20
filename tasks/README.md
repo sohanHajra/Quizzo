@@ -1,69 +1,11 @@
-# `tasks`
+# Quizzo internals
 
-## Overview
+The runnable entry point is the root-level [app.py](../app.py). The `tasks/` packages are small building blocks, retained to make the original 2024 structure understandable.
 
-The `tasks` directory contains a collection of modules designed to facilitate document ingestion, text embedding, quiz generation, and management for an interactive quiz application called **Quizzo**. This directory serves as the core functionality for the application, integrating various components to allow users to upload documents, generate quizzes, and manage quiz interactions.
+- `Document_Ingestion/`: uploaded PDF extraction, temporary file cleanup.
+- `Embeddings/`: Vertex AI embedding adapter.
+- `Data_Pipeline/`: chunk text and create the in-memory Chroma index.
+- `Quiz_Generator/`: retrieve contextual chunks, generate questions, validate JSON and screen duplicates.
+- `Quiz_Manager/`: quiz navigation; the root app persists answers in Streamlit session state.
 
-### Directory Structure
-
-```
-tasks/
-│
-├── Document_Ingestion/
-│   ├── __init__.py
-│   └── Document_Ingestion.py
-│
-├── Embeddings/
-│   ├── __init__.py
-│   └── Embedding.py
-│
-├── Data_Pipeline/
-│   ├── __init__.py
-│   └── data_pipeline.py
-│
-├── Quiz_Generator/
-│   ├── __init__.py
-│   └── quiz_generator.py
-│
-├── Quiz_Manager/
-│   ├── __init__.py
-│   └── quiz_manager.py
-│
-└── app.py
-```
-
-### Contents
-
-1. **Document_Ingestion**: 
-   - Contains functionality for processing and ingesting PDF documents using `PyPDFLoader`. The `DocumentProcessor` class provides methods to upload and extract pages from the PDF files.
-
-2. **Embeddings**: 
-   - Manages the connection to Google Cloud's Vertex AI for generating text embeddings. The `EmbeddingClient` class encapsulates methods for embedding queries and documents, allowing for semantic understanding of text.
-
-3. **Data_Pipeline**: 
-   - Implements the `ChromaCollectionCreator` class, which creates a Chroma collection of document embeddings from the processed documents. This class enables efficient storage and retrieval of document vectors for querying.
-
-4. **Quiz_Generator**: 
-   - Contains the `QuizGenerator` class that generates quiz questions based on a specified topic and document content. It uses a large language model (LLM) to create questions in a structured JSON format, ensuring they are unique and relevant.
-
-5. **Quiz_Manager**: 
-   - Handles the navigation and management of quiz questions. The `QuizManager` class allows users to retrieve questions, check answers, and manage quiz state effectively.
-
-6. **app.py**: 
-   - The main entry point for the Quizzo application. This script integrates all the components from the `tasks` directory, facilitating user interaction through a Streamlit interface. It orchestrates the document ingestion, quiz generation, and quiz management processes.
-
-### Installation
-
-Before running the application, ensure you have the required dependencies installed in the `requirements.txt`:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Usage
-
-To run the application, navigate to the `tasks` directory and execute:
-
-```bash
-streamlit run app.py
-```
+The nested `tasks/App/app.py` is a **historical prototype**, not the supported entry point. It may not run against current dependencies. See the root README for the current execution and test commands. 
