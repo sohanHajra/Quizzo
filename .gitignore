@@ -1,9 +1,17 @@
+.venv/
 env/
 db/
 __pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+*.pdf
 application_key.json
 authentication.json
 ai-data.json
-
-# Tasks
+*service-account*.json
 *_solution.py
