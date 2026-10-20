@@ -1,13 +1,8 @@
-__import__('pysqlite3')
-import sys
+"""Quizzo: a document-grounded study quiz prototype (2026 maintenance revision)."""
 
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-import streamlit as st
 import os
-import sys
-import json
-sys.path.append(os.path.abspath('../../'))
+import streamlit as st
+
 from tasks.Document_Ingestion.Document_Ingestion import DocumentProcessor
 from tasks.Embeddings.Embedding import EmbeddingClient
 from tasks.Data_Pipeline.data_pipeline import ChromaCollectionCreator
@@ -16,156 +11,88 @@ from tasks.Quiz_Manager.quiz_manager import QuizManager
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
+from io import BytesIO
 
-import base64
 
-if __name__ == "__main__":
-    
-    embed_config = {
-        "model_name": "textembedding-gecko@003",
-        "project": "PROJECT_ID",
-        "location": "us-central1",
-        "key_file_path":"API_KEY_FILE"
-    }
-    
-    # Add Session State
-    if 'question_bank' not in st.session_state or len(st.session_state['question_bank']) == 0:
-        
-        st.session_state["question_bank"] = []
-    
-        screen = st.empty()
-        with screen.container():
-            st.markdown("<style>a {color: white;text-decoration: none; transition: color 0.2s;} a:visited {color: white;} a:hover{color: #7D8C1F; text-decoration: none;}</style><h1 style='text-align: center;'><a href='https://quizzo.streamlit.app' target='_self'>Quizzo</a></h1>", unsafe_allow_html=True)
-            st.header("Quiz Builder")
-            
-            # Create a new st.form flow control for Data Ingestion
-            with st.form("Load Data to Chroma"):
-                st.write("Select PDFs for Ingestion, the topic for the quiz, and click Generate!")
-                
-                processor = DocumentProcessor()
-                processor.ingest_documents()
-            
-                embed_client = EmbeddingClient(**embed_config) 
-            
-                chroma_creator = ChromaCollectionCreator(processor, embed_client)
-              
-                topic_input= st.text_input("Topic for Generative Quiz", placeholder="Enter the topic of the document")
-                num_questions = st.slider("Number of Questions", min_value=1, max_value=10, value=1)
-                    
-                submitted = st.form_submit_button("Generate")
-                
-                if submitted:
-                    with st.spinner("Processing..."):
-                        chroma_creator.create_chroma_collection()
-                            
-                        if len(processor.pages) > 0:
-                            st.success(f"Generating {num_questions} question(s) for topic: {topic_input}", icon="✅")
-                        
-                        generator = QuizGenerator(topic_input, num_questions, chroma_creator)
-                        question_bank = generator.generate_quiz()
-                    
-                        st.session_state["question_bank"] = question_bank
+st.set_page_config(page_title="Quizzo", page_icon="📚")
+st.title("Quizzo")
+st.caption("Study the material you actually want to be tested on. Upload PDFs and generate a document-grounded quiz.")
 
-                        
-                        st.session_state["display_quiz"] = True
 
-                   
-                        st.session_state["question_index"] = 0
-                        st.rerun()
-    
-    
-    elif "display_quiz" in st.session_state and st.session_state["display_quiz"]:
-        st.empty()
-        with st.container():
-            st.markdown("<style>a {color: white;text-decoration: none; transition: color 0.2s;} a:visited {color: white;} a:hover{color: #7D8C1F; text-decoration: none;}</style><h1 style='text-align: center;'><a href='https://quizzo.streamlit.app' target='_self'>Quizzo</a></h1>", unsafe_allow_html=True)
-            st.header(f"Quiz Question {st.session_state['question_index']+1}: ")
-            quiz_manager = QuizManager(st.session_state["question_bank"])
-            st.session_state["correct_answers"] = 0
-            st.session_state["incorrect_answers"] = 0
-            
-            # Format the question and display it
-            with st.form("MCQ"):
-             
-                index_question = quiz_manager.get_question_at_index(st.session_state["question_index"])
-                
-                # Unpack choices for radio button
-                choices = []
-                for choice in index_question['choices']:
-                    key = choice['key']
-                    value = choice['value']
-                    choices.append(f"{key}) {value}")
-                
-                # Display the Question
-                st.write(f"{st.session_state['question_index'] + 1}. {index_question['question']}")
-                answer = st.radio(
-                    "Choose an answer",
-                    choices,
-                    index = None
-                )
-                
-                st.write("")
+def reset_quiz():
+    for key in ("questions", "index", "answers"):
+        st.session_state.pop(key, None)
 
-                column1,column2,column3 = st.columns([4,6,3])
-                c1,c2,c3 = column2.columns([2,3,2])
-                answer_choice = c2.form_submit_button("Check")
 
-                
-                if answer_choice and answer is not None:
-                    correct_answer_key = index_question['answer']
-                    if answer.startswith(correct_answer_key):
-                        st.success("Correct!")
-                        st.session_state["correct_answers"] += 1
-                    else:
-                        st.error("Incorrect!")
-                        st.session_state["incorrect_answers"] += 1
-                        st.write(f"Correct Answer: {correct_answer_key}) {index_question['choices'][ord(correct_answer_key) - ord('A')]['value']}")
-                    st.write(f"Explanation: {index_question['explanation']}")
-                    
+def report_pdf(questions, answers):
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=letter)
+    total = len(questions)
+    correct = sum(answers.get(i) == q["answer"] for i, q in enumerate(questions))
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(48, 750, "Quizzo | Quiz report")
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(48, 716, f"Questions: {total}")
+    pdf.drawString(48, 694, f"Answered: {len(answers)}")
+    pdf.drawString(48, 672, f"Correct: {correct}")
+    pdf.drawString(48, 650, f"Score: {100 * correct / total:.1f}%")
+    pdf.save()
+    return output.getvalue()
 
-                if st.session_state['question_index'] > 0:
-                    column1.form_submit_button("Previous Question", on_click=lambda: quiz_manager.next_question_index(direction=-1))
-                
-                if answer is not None and st.session_state['question_index'] < len(quiz_manager.questions) - 1:
-                    column3.form_submit_button("Next Question", on_click=lambda: quiz_manager.next_question_index(direction=1))
-                    
-                if answer is not None and st.session_state['question_index'] == len(quiz_manager.questions)-1:
-                    if column3.form_submit_button("Generate Report", on_click=lambda: quiz_manager.next_question_index(direction=0)):
-                        c = canvas.Canvas("report.pdf", pagesize=letter)
 
-                        c.setFont("Helvetica", 24)
-                        c.drawCentredString(4.25 * inch, 10.5 * inch, "Quizzo")
-                        c.setFont("Helvetica", 24)
-                        c.drawString(30, 720, "Quiz Report")
-
-                        c.setFont("Helvetica", 14)
-                        c.drawString(30, 680, f"Total questions: {len(quiz_manager.questions)}")
-
-                        # Add the number of correct answers
-                        c.drawString(30, 655, f"Correct answers: {st.session_state['correct_answers']}")
-
-                        # Add the number of incorrect answers
-                        c.drawString(30, 625, f"Incorrect answers: {st.session_state['incorrect_answers']}")
-
-                        score = st.session_state['correct_answers'] / len(quiz_manager.questions) * 100
-                        c.drawString(30, 600, f"Score: {score:.2f}%")
-
-                        c.save()
-                        with open("report.pdf", "rb") as f:
-                            pdf_bytes = f.read()
-
-                        # Create a download button for the PDF file
-                        b64 = base64.b64encode(pdf_bytes).decode()
-                        href = f'<a href="data:application/octet-stream;base64,{b64}" download="report.pdf">Download Quiz Report</a>'
-                        st.markdown(href, unsafe_allow_html=True)
-
-                progress = (st.session_state['question_index'] / len(quiz_manager.questions))
-
-                if st.session_state['question_index'] == len(quiz_manager.questions)-1 and answer is not None:
-                    progress = 1.0
-
-                # Display the progress bar
-                st.progress(progress)
-                st.markdown(f'<div style="width: 100%; height: 20px; position: relative;">'
-                f'<div style="position: absolute; left: {min(progress * 100, 96)}%; top: -20px;">{progress * 100:.0f}%</div>'
-                f'</div>',unsafe_allow_html=True)
+if "questions" not in st.session_state:
+    with st.form("build"):
+        processor = DocumentProcessor()
+        processor.ingest_documents()
+        topic = st.text_input("What should the quiz focus on?", placeholder="e.g. chapter 4, market structure")
+        count = st.slider("Questions", 1, 10, 5)
+        submitted = st.form_submit_button("Generate quiz")
+    if submitted:
+        if not processor.pages:
+            st.error("Please upload at least one PDF with readable text.")
+        else:
+            try:
+                project = os.getenv("GOOGLE_CLOUD_PROJECT") or None
+                location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+                model = os.getenv("QUIZZO_LLM_MODEL", "gemini-pro")
+                embeddings = EmbeddingClient(project=project, location=location)
+                store = ChromaCollectionCreator(processor, embeddings).create_chroma_collection()
+                with st.spinner("Generating document-grounded questions..."):
+                    questions = QuizGenerator(topic, count, store, model_name=model).generate_quiz()
+                st.session_state.update(questions=questions, index=0, answers={})
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Quiz generation failed: {exc}")
+else:
+    questions = st.session_state["questions"]
+    index = st.session_state["index"]
+    answers = st.session_state["answers"]
+    manager = QuizManager(questions)
+    item = manager.get_question_at_index(index)
+    st.progress((index + 1) / len(questions))
+    st.subheader(f"Question {index + 1} of {len(questions)}")
+    st.write(item["question"])
+    labels = {c["key"]: f'{c["key"]}) {c["value"]}' for c in item["choices"]}
+    selection = st.radio("Select one answer", list(labels), format_func=labels.get,
+                         index=None, key=f"answer_{index}", disabled=index in answers)
+    if index not in answers:
+        if st.button("Check answer", disabled=selection is None):
+            answers[index] = selection
+            st.rerun()
+    else:
+        is_correct = answers[index] == item["answer"]
+        (st.success if is_correct else st.error)("Correct!" if is_correct else f'Correct answer: {item["answer"]}')
+        st.write(item["explanation"])
+    left, right = st.columns(2)
+    if left.button("Previous", disabled=index == 0):
+        st.session_state["index"] -= 1
+        st.rerun()
+    if right.button("Next", disabled=index == len(questions) - 1 or index not in answers):
+        st.session_state["index"] += 1
+        st.rerun()
+    if len(answers) == len(questions):
+        st.download_button("Download score report (PDF)", data=report_pdf(questions, answers),
+                           file_name="quizzo-report.pdf", mime="application/pdf")
+    if st.button("Build a new quiz"):
+        reset_quiz()
+        st.rerun()
