@@ -74,7 +74,7 @@ if __name__ == "__main__":
         st.empty()
         with st.container():
             st.markdown("<h1 style='text-align: center;'>Quizzo</h1>", unsafe_allow_html=True)
-            st.header(f"Quiz Question {st.session_state["question_index"]+1}: ")
+            st.header(f"Quiz Question {st.session_state['question_index']+1}: ")
             quiz_manager = QuizManager(st.session_state["question_bank"])
             
             # Format the question and display it
